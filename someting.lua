@@ -1,7 +1,4 @@
--- Top10FruitsLocal.lua
--- Put this in StarterPlayerScripts as a LocalScript
 
--- 1) Base price per kg, per fruit type
 local basePricePerKg = {
     ["carrot"] = 18,
     ["strawberry"] = 14,
@@ -123,18 +120,13 @@ local function computeFruitValue(fruit)
     local base = basePricePerKg[fruit.Name:lower()]
     if not base then return 0 end
 
-    -- 2) Weight (NumberValue or Attribute)
-    local w = fruit:GetAttribute("weight")
-    if typeof(w) ~= "number" then
-        local val = fruit:FindFirstChild("weight")
-        if val and val:IsA("NumberValue") then
-            w = val.Value
-        end
-    end
-    if type(w) ~= "number" or w <= 0 then
+    local w = fruit:FindFirstChild("Weight")
+    if w and w:IsA("NumberValue") then
+        w = w.Value
+    else
         return 0
     end
-
+    
     -- 3) Variant (StringValue)
     local variant = "Normal"
     local varObj = fruit:FindFirstChild("variant")
