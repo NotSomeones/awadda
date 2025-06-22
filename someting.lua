@@ -1,7 +1,10 @@
 -- Services
-local HttpService   = game:GetService("HttpService")
-local RunService    = game:GetService("RunService")
-local Players       = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Players    = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+
+-- Executor HTTP function
+local httpRequest = http_request or request or syn.request
 
 -- Configuration
 local SERVER_URL    = "http://201.229.73.179:3000/update"
@@ -20,29 +23,35 @@ RunService.Heartbeat:Connect(function(deltaTime)
     -- Gather positions for every player
     local payload = {}
     for _, player in pairs(Players:GetPlayers()) do
-        local char = player.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
         if root then
             table.insert(payload, {
                 username = player.Name,
                 position = {
                     x = root.Position.X,
                     y = root.Position.Y,
-                    z = root.Position.Z
+                    z = root.Position.Z,
                 }
             })
         end
     end
 
-    -- Send in one go
-    local ok, err = pcall(function()
-        HttpService:PostAsync(
-            SERVER_URL,
-            HttpService:JSONEncode(payload),
-            Enum.HttpContentType.ApplicationJson
-        )
+    -- JSON-encode
+    local body = HttpService:JSONEncode(payload)
+
+    -- Send via executor http_request
+    local success, response = pcall(function()
+        return httpRequest({
+            Url     = SERVER_URL,
+            Method  = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json"
+            },
+            Body    = body
+        })
     end)
-    if not ok then
-        warn("Minimap POST failed:", err)
+
+    if not success or (response and response.StatusCode and response.StatusCode >= 400) then
+        warn("Minimap POST failed:", response and response.Body or "unknown error")
     end
 end)
