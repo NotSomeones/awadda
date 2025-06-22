@@ -1,7 +1,4 @@
--- Top10FruitsWithFormattedValues.lua
--- LocalScript in StarterPlayerScripts
 
--- 1) Base prices (min Sheckles) per fruit type
 local basePricePerKg = {
     ["carrot"] = 18, ["strawberry"] = 14, ["blueberry"] = 18,
     ["orange tulip"] = 767, ["tomato"] = 27, ["corn"] = 36,
@@ -83,30 +80,44 @@ local function getModifiersMul(fruit)
     return 1 + sum - count
 end
 
--- Computes the total value of a single fruit instance
+-- Computes the total value and breakdown of a single fruit instance
 local function computeFruitValue(fruit)
-    local base = basePricePerKg[fruit.Name:lower()]
-    if not base then return 0 end
-
+    local base = basePricePerKg[fruit.Name:lower()] or 0
+    local growthMul = 1
+    local tempBonus = 0
+    local envStacks = 0
+    
+    -- Weight
     local wVal = fruit:FindFirstChild("Weight")
-    if not (wVal and wVal:IsA("NumberValue")) then return 0 end
-    local w = wVal.Value
-    if w <= 0 then return 0 end
+    local w = (wVal and wVal:IsA("NumberValue") and wVal.Value) or 0
+    if w <= 0 then return 0, base, growthMul, tempBonus, envStacks, 1 end
 
+    -- Variant
     local variant = "Normal"
     local varObj = fruit:FindFirstChild("variant")
     if varObj and varObj:IsA("StringValue") then variant = varObj.Value end
+    local variantMul = getVariantMul(variant)
 
+    -- Modifiers
+    local modMul = getModifiersMul(fruit)
+
+    -- Friend Boost
     local friendPct = (fruit:GetAttribute("FriendBoost") or 0) / 100
+    local friendMul = 1 + friendPct
 
-    local vMul = getVariantMul(variant)
-    local mMul = getModifiersMul(fruit)
-    local fMul = 1 + friendPct
+    -- Final per-kg multiplier
+    local perKg = base * variantMul * modMul * friendMul
 
-    return base * vMul * mMul * fMul * w
+    -- Quantity
+    local quantity = 1
+
+    -- Total value
+    local total = perKg * w * quantity
+    
+    return total, base, variantMul, tempBonus, envStacks, w, quantity
 end
 
--- Scans all farms, prints owner, top 10 fruits with formatted values, and highlights them
+-- Scans all farms, prints owner, top 10 fruits with detailed breakdown, and highlights them
 local function printTop10Fruits()
     local farmsFolder = workspace:WaitForChild("Farm")
     for _, farm in ipairs(farmsFolder:GetChildren()) do
@@ -126,9 +137,11 @@ local function printTop10Fruits()
                 local fruitsFolder = plantType:FindFirstChild("Fruits")
                 if fruitsFolder then
                     for _, fruit in ipairs(fruitsFolder:GetChildren()) do
-                        local val = computeFruitValue(fruit)
-                        if val > 0 then
-                            table.insert(scored, {fruit = fruit, value = val})
+                        local total, base, growthMul, tempBonus, envStacks, w, quantity = computeFruitValue(fruit)
+                        if total > 0 then
+                            table.insert(scored, {fruit = fruit, total = total, base = base,
+                                growthMul = growthMul, tempBonus = tempBonus, envStacks = envStacks,
+                                weight = w, quantity = quantity})
                         end
                     end
                 end
@@ -136,13 +149,15 @@ local function printTop10Fruits()
         end
 
         -- Sort descending by value
-        table.sort(scored, function(a,b) return a.value > b.value end)
+        table.sort(scored, function(a,b) return a.total > b.total end)
 
         -- Print and highlight up to top 10
         for rank = 1, math.min(10, #scored) do
             local e = scored[rank]
-            local valStr = formatValue(e.value)
+            local valStr = formatValue(e.total)
             warn(string.format("%2d. %s → %s Sheckles", rank, e.fruit.Name, valStr))
+            warn(string.format("  Formula: %d × %d × (1 + %d) × (1 + %d) × %d = %s", 
+                e.base, e.growthMul, e.tempBonus, e.envStacks, e.weight * e.quantity, valStr))
 
             -- Create highlight
             local hl = Instance.new("Highlight")
@@ -152,9 +167,7 @@ local function printTop10Fruits()
             hl.OutlineTransparency = 1
         end
 
-        if #scored == 0 then
-            warn("   (no fruits with valid weight found)")
-        end
+        if #scored == 0 then warn("   (no fruits with valid weight found)") end
     end
 end
 
