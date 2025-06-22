@@ -46,4 +46,5 @@ end
 while true do
 	pcall(sendPlayerLocations)
 	wait(1)
+	--sss
 end
