@@ -1,17 +1,18 @@
--- LocalScript (for executor only)
+-- Minimap Sender: Synapse / KRNL
+-- Sends all player positions (x, z only) to your server every 0.2s
 
 local RunService  = game:GetService("RunService")
 local Players     = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
-
--- Executor HTTP function
 local httpRequest = http_request or request or (syn and syn.request)
 
+-- Ensure HTTP function is available
 if not httpRequest then
-    warn("[Minimap] ❌ No executor HTTP function found")
+    warn("[Minimap] ❌ No supported HTTP function in executor.")
     return
 end
 
+-- Config
 local SERVER_URL    = "http://201.229.73.179:3000/update"
 local SEND_INTERVAL = 0.2
 local lastSend      = 0
@@ -22,49 +23,45 @@ RunService.Heartbeat:Connect(function(dt)
     lastSend = 0
 
     local payload = {}
+
     for _, player in ipairs(Players:GetPlayers()) do
-        local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        local char = player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
         if root then
             table.insert(payload, {
                 username = player.Name,
                 position = {
                     x = root.Position.X,
-                    z = root.Position.Z, -- ignore Y for 2D map
+                    z = root.Position.Z  -- 2D only
                 }
             })
         end
     end
 
-    -- Debug
-    print(("[Minimap] Sending %d player(s)"):format(#payload))
+    if #payload == 0 then return end
 
     local body = HttpService:JSONEncode(payload)
 
-    local requestData = {
+    local req = {
         Url     = SERVER_URL,
         Method  = "POST",
         Headers = { ["Content-Type"] = "application/json" },
         Body    = body,
+
+        -- Lowercase compatibility for KRNL/etc
+        url     = SERVER_URL,
+        method  = "POST",
+        headers = { ["Content-Type"] = "application/json" },
+        body    = body
     }
 
-    -- Add lowercase keys for KRNL/some executors
-    requestData.url     = requestData.Url
-    requestData.method  = requestData.Method
-    requestData.headers = requestData.Headers
-    requestData.body    = requestData.Body
-
     local success, response = pcall(function()
-        return httpRequest(requestData)
+        return httpRequest(req)
     end)
 
-    if not success then
-        warn("[Minimap] ❌ HTTP request failed:", response)
-        return
-    end
-
-    -- Response dump
-    print("[Minimap] ✅ HTTP request sent. Response:")
-    for k, v in pairs(response) do
-        print(" ", k, "=", v)
+    if success then
+        print(("[Minimap] ✅ Sent %d players | Code: %s"):format(#payload, response.StatusCode or response.status or "???"))
+    else
+        warn("[Minimap] ❌ Failed to send:", response)
     end
 end)
