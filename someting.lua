@@ -45,5 +45,5 @@ end
 -- Run every 5 seconds
 while true do
 	pcall(sendPlayerLocations)
-	wait(5)
+	wait(1)
 end
