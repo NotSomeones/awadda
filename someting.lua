@@ -1,41 +1,48 @@
-local farms = game.Workspace.Farm
-local playername = game.Players.LocalPlayer.Name
+-- Services
+local HttpService   = game:GetService("HttpService")
+local RunService    = game:GetService("RunService")
+local Players       = game:GetService("Players")
 
-local function findfarm()
-    for _, v in pairs(farms:GetChildren()) do
-        if v.Important.Data.Owner.Value == playername then
-            print("found it")
-            return v
+-- Configuration
+local SERVER_URL    = "http://201.229.73.179:3000/update"
+local SEND_INTERVAL = 0.2  -- seconds between POSTS
+
+-- State
+local lastSend = 0
+
+RunService.Heartbeat:Connect(function(deltaTime)
+    lastSend = lastSend + deltaTime
+    if lastSend < SEND_INTERVAL then
+        return
+    end
+    lastSend = 0
+
+    -- Gather positions for every player
+    local payload = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        local char = player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root then
+            table.insert(payload, {
+                username = player.Name,
+                position = {
+                    x = root.Position.X,
+                    y = root.Position.Y,
+                    z = root.Position.Z
+                }
+            })
         end
     end
-end
 
-local myfarm = findfarm()
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local seedshop = game.Players.LocalPlayer.PlayerGui.Seed_Shop
-
-local newlist = {}
-
-local function buyallstock()
-    for _, v in pairs(seedshop.Frame.ScrollingFrame:GetChildren()) do
-        local mainframe = v:FindFirstChild("Main_Frame")
-        if not mainframe then continue end
-        local seedname = v.Name
-        if seedname == "Carrots" then continue end
-        local stockTextObj = mainframe:FindFirstChild("Stock_Text")
-        if not stockTextObj then continue end
-
-        local stockCount = tonumber(stockTextObj.Text:match("%d+"))
-        if not stockCount or stockCount <= 0 then continue end
-
-        for _ = 1, stockCount do
-            ReplicatedStorage.GameEvents.BuySeedStock:FireServer(seedname)
-        end
+    -- Send in one go
+    local ok, err = pcall(function()
+        HttpService:PostAsync(
+            SERVER_URL,
+            HttpService:JSONEncode(payload),
+            Enum.HttpContentType.ApplicationJson
+        )
+    end)
+    if not ok then
+        warn("Minimap POST failed:", err)
     end
-end
-
-while true do
-    wait(10)
-    buyallstock()
-end
+end)
