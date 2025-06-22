@@ -1,4 +1,4 @@
--- Top10FruitsWithHighlights.lua
+-- Top10FruitsWithFormattedValues.lua
 -- LocalScript in StarterPlayerScripts
 
 -- 1) Base prices (min Sheckles) per fruit type
@@ -34,19 +34,44 @@ local basePricePerKg = {
 
 -- 2) Modifier values
 local modifierValues = {
-    shocked=100,frozen=10,wet=2,chilled=2,choc=2,moonlit=2,bloodlit=4,
-    celestial=120,disco=125,zomb=25,plasma=5,voidtouched=135,
-    pollinated=3,honeyglazed=5,dawnbound=150,heavenly=5,
-    cooked=10,burnt=4,molten=25,meteoric=125,windstruck=2,
-    alienlike=100,sundried=85,verdant=4,paradisal=18,twisted=5,galactic=120
+    shocked=100, frozen=10, wet=2, chilled=2, choc=2, moonlit=2, bloodlit=4,
+    celestial=120, disco=125, zomb=25, plasma=5, voidtouched=135,
+    pollinated=3, honeyglazed=5, dawnbound=150, heavenly=5,
+    cooked=10, burnt=4, molten=25, meteoric=125, windstruck=2,
+    alienlike=100, sundried=85, verdant=4, paradisal=18, twisted=5, galactic=120
 }
 
+-- HSV gradient helper for top-10 ranking highlights
+local function getColorForRank(rank)
+    local t = (rank - 1) / 9 -- 0 for rank 1, 1 for rank 10
+    local hue = (1 - t) * 0.33 -- green (0.33) down to red (0)
+    return Color3.fromHSV(hue, 1, 1)
+end
+
+-- Formats numbers into "thousand", "million", etc.
+local function formatValue(n)
+    local absn = math.abs(n)
+    if absn >= 1e12 then
+        return string.format("%.2f trillion", n / 1e12)
+    elseif absn >= 1e9 then
+        return string.format("%.2f billion", n / 1e9)
+    elseif absn >= 1e6 then
+        return string.format("%.2f million", n / 1e6)
+    elseif absn >= 1e3 then
+        return string.format("%.2f thousand", n / 1e3)
+    else
+        return string.format("%.0f", n)
+    end
+end
+
+-- Returns variant multiplier based on StringValue "variant"
 local function getVariantMul(variant)
     if variant == "Rainbow" then return 50
     elseif variant == "Gold"    then return 20
     else return 1 end
 end
 
+-- Returns combined multiplier from attributes like shocked, molten, etc.
 local function getModifiersMul(fruit)
     local sum, count = 0, 0
     for modName, modVal in pairs(modifierValues) do
@@ -58,49 +83,44 @@ local function getModifiersMul(fruit)
     return 1 + sum - count
 end
 
+-- Computes the total value of a single fruit instance
 local function computeFruitValue(fruit)
-    -- Base price
     local base = basePricePerKg[fruit.Name:lower()]
     if not base then return 0 end
 
-    -- Weight
     local wVal = fruit:FindFirstChild("Weight")
     if not (wVal and wVal:IsA("NumberValue")) then return 0 end
     local w = wVal.Value
     if w <= 0 then return 0 end
 
-    -- Variant
     local variant = "Normal"
     local varObj = fruit:FindFirstChild("variant")
-    if varObj and varObj:IsA("StringValue") then
-        variant = varObj.Value
-    end
+    if varObj and varObj:IsA("StringValue") then variant = varObj.Value end
 
-    -- Friend boost (optional)
     local friendPct = (fruit:GetAttribute("FriendBoost") or 0) / 100
 
-    -- Multipliers
     local vMul = getVariantMul(variant)
     local mMul = getModifiersMul(fruit)
     local fMul = 1 + friendPct
 
-    -- Final value
     return base * vMul * mMul * fMul * w
 end
 
+-- Scans all farms, prints owner, top 10 fruits with formatted values, and highlights them
 local function printTop10Fruits()
     local farmsFolder = workspace:WaitForChild("Farm")
     for _, farm in ipairs(farmsFolder:GetChildren()) do
-        -- Get owner
+        -- Print farm name and owner
         local ownerVal = farm:FindFirstChild("Important")
             and farm.Important:FindFirstChild("Data")
             and farm.Important.Data:FindFirstChild("Owner")
         local ownerName = ownerVal and ownerVal.Value or "Unknown"
-        warn(("🏡 Farm: %s  |  Owner: %s"):format(farm.Name, ownerName))
+        warn(string.format("🏡 Farm: %s  |  Owner: %s", farm.Name, ownerName))
 
-        -- Collect values
+        -- Collect fruit values
         local scored = {}
-        local phys = farm.Important and farm.Important:FindFirstChild("Plants_Physical")
+        local phys = farm:FindFirstChild("Important")
+            and farm.Important:FindFirstChild("Plants_Physical")
         if phys then
             for _, plantType in ipairs(phys:GetChildren()) do
                 local fruitsFolder = plantType:FindFirstChild("Fruits")
@@ -108,38 +128,35 @@ local function printTop10Fruits()
                     for _, fruit in ipairs(fruitsFolder:GetChildren()) do
                         local val = computeFruitValue(fruit)
                         if val > 0 then
-                            table.insert(scored, { fruit = fruit, value = val })
+                            table.insert(scored, {fruit = fruit, value = val})
                         end
                     end
                 end
             end
         end
 
-        -- Sort descending
+        -- Sort descending by value
         table.sort(scored, function(a,b) return a.value > b.value end)
 
-        -- Show and highlight top 10
+        -- Print and highlight up to top 10
         for rank = 1, math.min(10, #scored) do
             local e = scored[rank]
-            local name = e.fruit.Name
-            local val  = e.value
-            warn(("%2d. %s → $%.2f"):format(rank, name, val))
+            local valStr = formatValue(e.value)
+            warn(string.format("%2d. %s → %s Sheckles", rank, e.fruit.Name, valStr))
 
-            -- Highlight the model
+            -- Create highlight
             local hl = Instance.new("Highlight")
             hl.Adornee = e.fruit
             hl.Parent  = e.fruit
-            -- Color gradient from green (rank 1) to red (rank 10)
-            local hue = (10 - (rank - 1)) / 10 * 0.33  -- 0.33 ≈ green; 0 ≈ red
-            hl.FillColor = Color3.fromHSV(hue, 1, 1)
-            hl.OutlineTransparency = 1  -- hide outline
+            hl.FillColor = getColorForRank(rank)
+            hl.OutlineTransparency = 1
         end
 
         if #scored == 0 then
-            warn("   (no fruits found or none had valid weight)")
+            warn("   (no fruits with valid weight found)")
         end
     end
 end
 
--- Run on load
+-- Trigger on load
 printTop10Fruits()
