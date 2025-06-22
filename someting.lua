@@ -1,60 +1,52 @@
--- FINAL MINIMAP TEST SENDER FOR SYNAPSE / KRNL
-
-local RunService  = game:GetService("RunService")
-local Players     = game:GetService("Players")
+-- Synapse X only
 local HttpService = game:GetService("HttpService")
-local httpRequest = http_request or request or (syn and syn.request)
+local Players = game:GetService("Players")
 
-if not httpRequest then
-    warn("❌ Executor doesn't support HTTP")
-    return
-end
+-- Set your webhook URL here
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1386476426525544579/O45syI_PlvdNR8vLDPyCZgcY2Rcs-PfbMx-JSiI6j0Q0GXcW3TmMqV_Yw54RQ_kGaFRt"
 
-local SERVER_URL = "http://201.229.73.179:3000/update"
-local SEND_INTERVAL = 0.5
-local lastSend = 0
-
-RunService.Heartbeat:Connect(function(dt)
-    lastSend += dt
-    if lastSend < SEND_INTERVAL then return end
-    lastSend = 0
-
-    local payload = {}
+local function sendPlayerData()
+    local data = {}
 
     for _, player in ipairs(Players:GetPlayers()) do
-        local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        if root then
-            table.insert(payload, {
-                username = player.Name,
-                position = {
-                    x = math.floor(root.Position.X),
-                    z = math.floor(root.Position.Z)
-                }
+        local character = player.Character
+        if character and character:FindFirstChild("HumanoidRootPart") then
+            local pos = character.HumanoidRootPart.Position
+            table.insert(data, {
+                name = player.Name,
+                x = pos.X,
+                y = pos.Y,
+                z = pos.Z
             })
         end
     end
 
-    if #payload == 0 then return end
+    local payload = HttpService:JSONEncode({
+        username = "Minimap Logger",
+        content = "Player location dump",
+        embeds = {{
+            title = "Player Coordinates",
+            description = "Map updated.",
+            color = 65280,
+            fields = {{
+                name = "Data",
+                value = "```json\n" .. HttpService:JSONEncode(data) .. "\n```"
+            }}
+        }}
+    })
 
-    local body = HttpService:JSONEncode(payload)
+    syn.request({
+        Url = WEBHOOK_URL,
+        Method = "POST",
+        Headers = {
+            ["Content-Type"] = "application/json"
+        },
+        Body = payload
+    })
+end
 
-    local req = {
-        Url     = SERVER_URL,
-        Method  = "POST",
-        Headers = { ["Content-Type"] = "application/json" },
-        Body    = body,
-
-        url     = SERVER_URL,
-        method  = "POST",
-        headers = { ["Content-Type"] = "application/json" },
-        body    = body
-    }
-
-    local success, res = pcall(function() return httpRequest(req) end)
-
-    if success then
-        print("✅ Sent", #payload, "players. Code:", res.StatusCode or res.status or "unknown")
-    else
-        warn("❌ Failed to send:", res)
-    end
-end)
+-- Run every 5 seconds
+while true do
+    pcall(sendPlayerData)
+    wait(5)
+end
