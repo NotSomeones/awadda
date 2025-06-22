@@ -1,7 +1,7 @@
 -- Services
-local RunService = game:GetService("RunService")
-local Players    = game:GetService("Players")
-local HttpService = game:GetService("HttpService")
+local RunService   = game:GetService("RunService")
+local Players      = game:GetService("Players")
+local HttpService  = game:GetService("HttpService")
 
 -- Executor HTTP function
 local httpRequest = http_request or request or syn.request
@@ -22,7 +22,7 @@ RunService.Heartbeat:Connect(function(deltaTime)
 
     -- Gather positions for every player
     local payload = {}
-    for _, player in pairs(Players:GetPlayers()) do
+    for _, player in ipairs(Players:GetPlayers()) do
         local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
         if root then
             table.insert(payload, {
@@ -35,6 +35,9 @@ RunService.Heartbeat:Connect(function(deltaTime)
             })
         end
     end
+
+    -- Debug: what are we sending?
+    print(("[Minimap] Sending payload for %d player(s) at time %.2f"):format(#payload, tick()))
 
     -- JSON-encode
     local body = HttpService:JSONEncode(payload)
@@ -51,7 +54,17 @@ RunService.Heartbeat:Connect(function(deltaTime)
         })
     end)
 
-    if not success or (response and response.StatusCode and response.StatusCode >= 400) then
-        warn("Minimap POST failed:", response and response.Body or "unknown error")
+    -- Debug: inspect result
+    if success then
+        if response and response.StatusCode then
+            print(("[Minimap] POST returned status %d"):format(response.StatusCode))
+            if response.Body then
+                print("[Minimap] Response body:", response.Body)
+            end
+        else
+            print("[Minimap] POST succeeded but no StatusCode in response")
+        end
+    else
+        warn("[Minimap] HTTP request failed:", response)
     end
 end)
