@@ -1,11 +1,8 @@
--- Roblox Lua script for KRNL: write player data to a JSON file instead of WebSocket
--- Place in a Script/LocalScript run by KRNL executor.
-
+-- Simplified KRNL Lua script: write player data to "playerdata.json" via writefile
 local HttpService = game:GetService("HttpService")
-local localPlayerName = "PlanetZ_DK"  -- <<< set your username, case-sensitive
-local outputPath = "/sdcard/krnl/workspace/playerdata.json"  -- <<< ensure this path is writable
+local localPlayerName = "PlanetZ_DK"
 
--- Wait until the player object appears
+-- Wait until player exists
 local function getLocalPlayer()
     local plr = game.Players:FindFirstChild(localPlayerName)
     if plr then return plr end
@@ -14,7 +11,7 @@ local function getLocalPlayer()
         plr = game.Players:FindFirstChild(localPlayerName)
         if plr then return plr end
     end
-    error("Local player '" .. localPlayerName .. "' not found")
+    error("Local player not found: " .. localPlayerName)
 end
 
 local localPlayer = getLocalPlayer()
@@ -62,12 +59,8 @@ while task.wait(0.01) do
         end)
         if success then
             pcall(function()
-                writefile(outputPath, jsonText)
+                writefile("playerdata.json", jsonText)
             end)
-        else
-            warn("Failed to JSON-encode player data")
         end
-    else
-        warn("Error collecting player data:", tbl)
     end
 end
