@@ -1,72 +1,82 @@
--- Optimized KRNL Lua writer for near-instant radar
-local HttpService      = game:GetService("HttpService")
-local RunService       = game:GetService("RunService")
-local writefile_safe   = writefile
-local getPlayers       = game.Players.GetPlayers
-local findChild        = game.Players.FindFirstChild
-local abs, floor       = math.abs, math.floor
-local rad, dot         = math.rad, Vector3.new().Dot
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
 
--- User settings:
-local localName    = "jmasters360"
-local priorityName = "PlanetZ_DK"
-local outPath      = "playerdata.json"
+-- CONFIG
+local localPlayerName = "jmasters360"      -- Your Roblox player name
+local priorityName    = "PlanetZ_DK"       -- The player to be placed first
+local outputFile      = "playerdata.json"
 
--- Wait for local player instance
+-- Wait for local player
 local function waitForPlayer(name)
-    local p = findChild(game.Players, name)
-    if p then return p end
-    repeat RunService.Heartbeat:Wait() until findChild(game.Players, name)
-    return findChild(game.Players, name)
+    local player
+    repeat
+        player = game.Players:FindFirstChild(name)
+        task.wait()
+    until player
+    return player
 end
 
-local localPlayer = waitForPlayer(localName)
+local localPlayer = waitForPlayer(localPlayerName)
+local lastHash = nil
 
--- Build output table each heartbeat
-local lastJson, lastHash = "", nil
+-- Hash utility
+local function simpleHash(text)
+    local hash = 0
+    for i = 1, #text do
+        hash = hash + string.byte(text, i)
+    end
+    return hash
+end
+
 RunService.Heartbeat:Connect(function()
-    -- Character check
     local char = localPlayer.Character
     if not char or not char.PrimaryPart then return end
 
     local head = char:FindFirstChild("Head")
     if not head then return end
 
-    local basePos   = head.Position
-    local lookCF    = char.PrimaryPart.CFrame * CFrame.Angles(0, rad(-90), 0)
-    local lookVec   = lookCF.LookVector
+    local rootCF = char.PrimaryPart.CFrame
+    local offsetCF = rootCF * CFrame.Angles(0, math.rad(-90), 0)
+    local lookVec = offsetCF.LookVector
+    local origin = head.Position
 
-    -- One-pass build: priorityName first, then others
-    local out       = {}
-    local players   = getPlayers(game.Players)
-    for i = 1, #players do
-        local p = players[i]
-        if p.Name ~= localName then
-            local c = p.Character
-            if c and c.PrimaryPart then
-                local hPos = c.Head.Position
-                local rel  = hPos - basePos
-                local x    = dot(Vector3.new(lookVec.X,0,lookVec.Z), rel)
-                local z    = dot(Vector3.new(-lookVec.Z,0,lookVec.X), rel)
-                local entry = {
-                    name  = p.Name,
-                    pos   = { x = x, y = rel.Y, z = z },
-                    lookY = c.Head.Rotation.Y
+    local out = {}
+
+    for _, player in ipairs(game.Players:GetPlayers()) do
+        if player == localPlayer then continue end
+        local c = player.Character
+        if c and c.PrimaryPart and c:FindFirstChild("Head") then
+            local pos = c.Head.Position
+            local rel = pos - origin
+
+            local adjX = rel:Dot(Vector3.new(lookVec.X, 0, lookVec.Z))
+            local adjZ = rel:Dot(Vector3.new(-lookVec.Z, 0, lookVec.X))
+
+            table.insert(out, {
+                name = player.Name,
+                pos = {
+                    x = adjX,
+                    y = rel.Y,
+                    z = adjZ,
                 }
-                if p.Name == priorityName then
-                    table.insert(out, 1, entry)
-                else
-                    out[#out+1] = entry
-                end
-            end
+            })
         end
     end
 
-    -- JSON-encode and hash
-    local jsonText = HttpService:JSONEncode(out)
-    local hash     = #jsonText + (jsonText:byte(1) or 0)
+    -- Insert local player with facing direction at the start
+    table.insert(out, 1, {
+        name = priorityName,
+        pos = { x = 0, y = 0, z = 0 },
+        dir = { x = lookVec.X, z = lookVec.Z }
+    })
+
+    local encoded = HttpService:JSONEncode(out)
+    local hash = simpleHash(encoded)
+
     if hash ~= lastHash then
-        lastHash, lastJson = hash, jsonText
-        pcall(writefile_safe, outPath, jsonText)
+        lastHash = hash
+        pcall(function()
+            writefile(outputFile, encoded)
+        end)
     end
 end)
