@@ -1,5 +1,5 @@
 local selectedport = "8000" --must match server port, keep as is
-local local_ip = "192.168.254.107" --server ipv4 (you can find this in task manager,more details, performance, Wi-Fi, ipv4 address or use the .bat)
+local local_ip = "201.229.73.179" --server ipv4 (you can find this in task manager,more details, performance, Wi-Fi, ipv4 address or use the .bat)
 --REPLACE THE IP WITH YOUR SERVER IPV4 IP, USE THE GETLOCALIP.BAT TO GET IT, DONT INCLUDE SPACE.
 --example: local local_ip = "12.34.56.78"
 --example: local local_ip = "123.456.78.90"
