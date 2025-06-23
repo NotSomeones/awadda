@@ -1,6 +1,6 @@
 -- Simplified KRNL Lua script: write player data to "playerdata.json" via writefile
 local HttpService = game:GetService("HttpService")
-local localPlayerName = "PlanetZ_DK"
+local localPlayerName = "jmasters360"
 
 -- Wait until player exists
 local function getLocalPlayer()
