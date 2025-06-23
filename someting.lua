@@ -1,5 +1,5 @@
 -- FASTAPI ENDPOINT
-local ENDPOINT = "http://localhost:8000/update"  -- change to your public IP if needed
+local ENDPOINT = "http://201.229.73.179:8000/update"  -- change to your public IP if needed
 
 -- Services
 local Players = game:GetService("Players")
