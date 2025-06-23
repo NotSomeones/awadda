@@ -1,147 +1,84 @@
--- Low-latency Roblox sender with change-threshold, throttling, and debug prints
+local selectedport = "8000" --must match server port, keep as is
+local local_ip = "192.168.254.107" --server ipv4 (you can find this in task manager,more details, performance, Wi-Fi, ipv4 address or use the .bat)
+--REPLACE THE IP WITH YOUR SERVER IPV4 IP, USE THE GETLOCALIP.BAT TO GET IT, DONT INCLUDE SPACE.
+--example: local local_ip = "12.34.56.78"
+--example: local local_ip = "123.456.78.90"
 
-local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
+local localPlayer = "jmasters360" -- replace this with the roblxo account username (no display name) you want to use it on aka, your main acc or whatever (cap sensitive btw)
 
--- Determine request function
-local request = request or http_request or (syn and syn.request)
-if not request then
-    warn("No HTTP request function available; HTTP will not work.")
-end
+local ws = WebSocket.connect("ws://" .. local_ip .. ":" .. selectedport)
 
--- CONFIGURATION
-local endpoint = "http://201.229.73.179:8000/update"
-local minInterval = 0.5         -- seconds: send at least every 0.5s
-local maxInterval = 2           -- seconds: force send if no significant movement but max time elapsed
-local moveThreshold = 1         -- studs: send if moved >1 stud since last sent
+ws.OnMessage:Connect(function(message)
+    print("received")
+end)
 
--- STATE
-local lastSentTime = 0
--- lastPositions[name] = {x=..., z=...}
-local lastPositions = {}
+ws.OnClose:Connect(function()
+    print("Disconnected")
+end)
 
--- Build payload: returns table mapping name -> {x, z}
-local function gatherPositions()
-    local out = {}
-    for _, player in ipairs(Players:GetPlayers()) do
-        local char = player.Character
-        if char then
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                out[player.Name] = { x = hrp.Position.X, z = hrp.Position.Z }
+
+
+localPlayer = game.Players[localPlayer]
+while task.wait(0.01) do
+    local players = {}
+    pcall(function()
+
+    local localCharacter = localPlayer.Character
+    local localPosition = localCharacter and localCharacter.Head and localCharacter.Head.Position
+    local localCFrame = localCharacter and localCharacter.PrimaryPart and localCharacter.PrimaryPart.CFrame
+
+    -- Apply a -90 degree rotation around the Y-axis, default 0 is nto good
+
+
+
+    local offsetCFrame = localCFrame * CFrame.Angles(0, math.rad(-90), 0)
+    local localLookVector = offsetCFrame.LookVector
+
+    for _, v in pairs(game.Players:GetChildren()) do
+        pcall(function()
+            if v.Character and v.Character.Head then
+                local head = v.Character.Head
+                local position = head.Position
+
+
+                if localPosition and localLookVector then
+                    local relX = position.X - localPosition.X
+                    local relY = position.Y - localPosition.Y
+                    local relZ = position.Z - localPosition.Z
+
+
+                    local relVector = Vector3.new(relX, relY, relZ)
+                    local adjustedRelX = relVector:Dot(Vector3.new(localLookVector.X, 0, localLookVector.Z))
+                    local adjustedRelZ = relVector:Dot(Vector3.new(-localLookVector.Z, 0, localLookVector.X))
+
+                    table.insert(players, {
+                        name = v.Name,
+                        pos = {x = adjustedRelX, y = relY, z = adjustedRelZ},
+                        lookY = head.Rotation.Y
+                    })
+                end
             end
-        end
-    end
-    print("[gatherPositions] Found " .. tostring(#Players:GetPlayers()) .. " players, payload entries: " .. tostring(#(function(t) local c=0; for _ in pairs(t) do c=c+1 end; return {c} end)(out))) 
-    return out
-end
-
--- Compare current vs lastPositions: return true if any moved > threshold or join/leave
-local function hasSignificantChange(current)
-    -- Check new or moved players
-    for name, pos in pairs(current) do
-        local last = lastPositions[name]
-        if not last then
-            print(("[hasChange] New player or first read: %s"):format(name))
-            return true
-        end
-        local dx = pos.x - last.x
-        local dz = pos.z - last.z
-        if dx*dx + dz*dz > moveThreshold * moveThreshold then
-            print(("[hasChange] Player %s moved significantly: Δx=%.2f, Δz=%.2f"):format(name, dx, dz))
-            return true
-        end
-    end
-    -- Check removed players
-    for name in pairs(lastPositions) do
-        if not current[name] then
-            print(("[hasChange] Player left or no longer has HRP: %s"):format(name))
-            return true
-        end
-    end
-    return false
-end
-
-local function sendPositions(currentTbl)
-    if not request then
-        warn("Skipping sendPositions: no request function")
-        return false
+        end)
     end
 
-    -- Build array payload with shorter keys
-    local arr = {}
-    for name, pos in pairs(currentTbl) do
-        table.insert(arr, { n = name, x = pos.x, z = pos.z })
+    -- now we put all data together, neatly for the server.py!
+    local output = "["
+
+    for i, player in ipairs(players) do
+        print(player.lookY)
+        output = output .. string.format('{"name": "%s", "pos": {"x": %f, "y": %f, "z": %f}, "lookY": %f}',
+            player.name,
+            player.pos.x, player.pos.y, player.pos.z,
+            player.lookY)
+
+        if i < #players then
+            output = output .. ","
+        end
     end
 
-    local ok, jsonData = pcall(function()
-        return HttpService:JSONEncode(arr)
+    output = output .. "]"
+
+
+    ws:Send(output)
     end)
-    if not ok then
-        warn("[sendPositions] JSON encode failed:", jsonData)
-        return false
-    end
-
-    print(("[sendPositions] Sending payload with %d entries"):format(#arr))
-    local success, response = pcall(function()
-        return request({
-            Url = endpoint,
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json"
-            },
-            Body = jsonData
-        })
-    end)
-    if not success then
-        warn("[sendPositions] HTTP request error:", response)
-        return false
-    end
-    if response and response.StatusCode == 200 then
-        print("[sendPositions] Success (HTTP 200)")
-        -- update lastPositions on success
-        lastPositions = currentTbl
-        return true
-    else
-        local code = response and response.StatusCode or "nil"
-        local body = response and response.Body or ""
-        warn(("[sendPositions] Failed send: HTTP %s, body: %s"):format(tostring(code), tostring(body)))
-        return false
-    end
 end
-
-RunService.Heartbeat:Connect(function(dt)
-    lastSentTime = lastSentTime + dt
-    local current = gatherPositions()
-    if hasSignificantChange(current) and lastSentTime >= minInterval then
-        print("[Heartbeat] Significant change and >= minInterval, attempting send")
-        if sendPositions(current) then
-            lastSentTime = 0
-        end
-    elseif lastSentTime >= maxInterval then
-        print("[Heartbeat] maxInterval reached, forcing send")
-        if sendPositions(current) then
-            lastSentTime = 0
-        end
-    else
-        -- Debug: not sending this tick
-        -- print(("[Heartbeat] No send: lastSentTime=%.2f"):format(lastSentTime))
-    end
-end)
-
--- Immediate send on join/leave
-Players.PlayerAdded:Connect(function(player)
-    print("[PlayerAdded] " .. player.Name)
-    local current = gatherPositions()
-    if sendPositions(current) then
-        lastSentTime = 0
-    end
-end)
-Players.PlayerRemoving:Connect(function(player)
-    print("[PlayerRemoving] " .. player.Name)
-    local current = gatherPositions()
-    if sendPositions(current) then
-        lastSentTime = 0
-    end
-end)
