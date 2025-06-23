@@ -1,8 +1,11 @@
--- Simplified KRNL Lua script: write player data to "playerdata.json" via writefile
-local HttpService = game:GetService("HttpService")
-local localPlayerName = "jmasters360"
+-- Simplified KRNL Lua script: write player data to "playerdata.json" via writefile,
+-- but ensure that "PlanetZ_DK" (if in the game) is first in the JSON array.
 
--- Wait until player exists
+local HttpService = game:GetService("HttpService")
+local localPlayerName = "jmasters360"      -- your local player
+local priorityName = "PlanetZ_DK"         -- the player you want first in the output
+
+-- Wait until local player exists
 local function getLocalPlayer()
     local plr = game.Players:FindFirstChild(localPlayerName)
     if plr then return plr end
@@ -15,6 +18,25 @@ local function getLocalPlayer()
 end
 
 local localPlayer = getLocalPlayer()
+
+-- Sort players so that priorityName comes first (if present), then the rest
+local function sortPlayers(players)
+    local sorted = {}
+    -- First: priorityName if present
+    for _, v in ipairs(players) do
+        if v.Name == priorityName then
+            table.insert(sorted, v)
+            break
+        end
+    end
+    -- Then: everyone else (excluding priorityName)
+    for _, v in ipairs(players) do
+        if v.Name ~= priorityName then
+            table.insert(sorted, v)
+        end
+    end
+    return sorted
+end
 
 while task.wait(0.01) do
     local ok, tbl = pcall(function()
@@ -30,7 +52,9 @@ while task.wait(0.01) do
         local lookVec = offsetCF.LookVector
 
         local out = {}
-        for _, v in ipairs(game.Players:GetPlayers()) do
+        -- Get all players and sort them
+        local allPlayers = sortPlayers(game.Players:GetPlayers())
+        for _, v in ipairs(allPlayers) do
             if v.Name ~= localPlayerName then
                 local c = v.Character
                 if c then
