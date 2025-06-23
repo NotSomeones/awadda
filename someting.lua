@@ -2,7 +2,7 @@
 -- Place in a Script/LocalScript run by KRNL executor.
 
 local HttpService = game:GetService("HttpService")
-local localPlayerName = "replace_me"  -- <<< set your username, case-sensitive
+local localPlayerName = "PlanetZ_DK"  -- <<< set your username, case-sensitive
 local outputPath = "/sdcard/krnl/workspace/playerdata.json"  -- <<< ensure this path is writable
 
 -- Wait until the player object appears
