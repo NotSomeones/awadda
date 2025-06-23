@@ -1,50 +1,46 @@
+-- FASTAPI ENDPOINT
+local ENDPOINT = "http://localhost:8000/update"  -- change to your public IP if needed
+
+-- Services
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
+local LocalPlayer = Players.LocalPlayer
 
-local webhookUrl = "https://discord.com/api/webhooks/1386479359056941077/1yrI_1uBaMdYwr_Tf62stMCiclININ70xffa3X06wqk3Ff0Nn7Gf2YpnNPNlROD28Cvw"
-local httpRequest = http_request or request or syn.request
+-- CONFIG
+local UPDATE_INTERVAL = 1 -- seconds
+local SendLoopEnabled = true
 
-local function sendPlayerLocations()
-	local playerData = {}
+-- Helper to get all visible player data (name, x, z)
+local function getPlayerData()
+    local data = {}
 
-	for _, player in ipairs(Players:GetPlayers()) do
-		local character = player.Character
-		if character and character:FindFirstChild("HumanoidRootPart") then
-			local pos = character.HumanoidRootPart.Position
-			table.insert(playerData, {
-				name = player.Name,
-				userId = player.UserId,
-				x = math.floor(pos.X),
-				y = math.floor(pos.Y),
-				z = math.floor(pos.Z)
-			})
-		end
-	end
+    for _, player in ipairs(Players:GetPlayers()) do
+        local char = player.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            local hrp = char.HumanoidRootPart
+            table.insert(data, {
+                name = player.Name,
+                x = math.floor(hrp.Position.X),
+                z = math.floor(hrp.Position.Z)
+            })
+        end
+    end
 
-	local jsonContent = HttpService:JSONEncode({
-		username = "Minimap Scanner",
-		content = "```json\n" .. HttpService:JSONEncode(playerData) .. "\n```"
-	})
-
-	local success, response = pcall(function()
-		return httpRequest({
-			Url = webhookUrl,
-			Method = "POST",
-			Headers = { ["Content-Type"] = "application/json" },
-			Body = jsonContent
-		})
-	end)
-
-	if success then
-		print("Player locations sent.")
-	else
-		warn("Failed to send player locations:", response)
-	end
+    return data
 end
 
--- Run every 5 seconds
-while true do
-	pcall(sendPlayerLocations)
-	wait(1)
-	--sss
-end
+-- Send loop
+task.spawn(function()
+    while SendLoopEnabled do
+        local ok, err = pcall(function()
+            local payload = HttpService:JSONEncode(getPlayerData())
+            HttpService:PostAsync(ENDPOINT, payload, Enum.HttpContentType.ApplicationJson)
+        end)
+
+        if not ok then
+            warn("[MinimapSender] Failed to send data:", err)
+        end
+
+        task.wait(UPDATE_INTERVAL)
+    end
+end)
