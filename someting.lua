@@ -1,7 +1,7 @@
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 
-local httpRequest = http_request or request or syn.request
+local request = request or http_request or syn.request
 
 local endpoint = "http://201.229.73.179:8000/update"  -- Your FastAPI POST endpoint
 
@@ -26,10 +26,10 @@ end
 
 local function sendPositions()
     local data = getPlayerPositions()
-    local jsonData = HttpService:JSONEncode(data)
+    local jsonData = HttpService:JSONEncode(data)  -- just encoding JSON, no HTTP
 
     local success, response = pcall(function()
-        return httpRequest({
+        return request({
             Url = endpoint,
             Method = "POST",
             Headers = {
@@ -39,14 +39,14 @@ local function sendPositions()
         })
     end)
 
-    if success then
+    if success and response and response.StatusCode == 200 then
         print("Positions sent successfully")
     else
         warn("Failed to send positions: " .. tostring(response))
     end
 end
 
--- Send on every heartbeat (use with caution, it sends ~60 requests per second)
+-- Send on every Heartbeat (up to ~60 times/sec, be careful with rate limits)
 RunService.Heartbeat:Connect(function()
     sendPositions()
 end)
