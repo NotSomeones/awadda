@@ -8,8 +8,8 @@ local abs, floor       = math.abs, math.floor
 local rad, dot         = math.rad, Vector3.new().Dot
 
 -- User settings:
-local localName    = "jmasters360"
-local priorityName = "PlanetZ_DK"
+local localName    = "poanmasa1"
+local priorityName = "Consumerofwheatx1"
 local outPath      = "playerdata.json"
 
 -- Wait for local player instance
